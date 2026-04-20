@@ -8,6 +8,7 @@ package main
 import (
 	"os"
 	"fmt"
+	"os/exec"
 )
 
 // This is the command we're trying to run (in docker) and this is the command we're going to parse:
@@ -26,7 +27,16 @@ func main() {
 }
 
 func run() {
-	fmt.Printf("Running")
+	fmt.Printf("Running %v\n", os.Args[2:])
+
+	cmd := exec.Command(os.Args[2], os.Args[3:]...)
+
+	// Mapping the shell's stdin/stdout/stderr to the commands stdin/stdout/stderr
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	cmd.Run()
 }
 
 func must(err error){
