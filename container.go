@@ -29,7 +29,7 @@ func main() {
 }
 
 func run() {
-	fmt.Printf("Running %v\n", os.Args[2:])
+	fmt.Printf("Running %v as %d\n", os.Args[2:], os.Getpid())
 
 	
 	// Once the shell is ran, it should reinvoke the same process but inside the new namespace (which is the child function)
@@ -42,7 +42,9 @@ func run() {
 
 	// Namespace handling (sending in the sysprocattributes of the syscall and setting it equal to the command)
 	cmd.SysProcAttr = &syscall.SysProcAttr {
-		Cloneflags: syscall.CLONE_NEWUTS, // unix time sharing system namespace (only shares the hostname)
+		// UTS = unix time sharing system namespace (doesn't share the hostname)
+		// PID = process id namespace (doesn't share pids)
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID, // unix time sharing system namespace (only shares the hostname)
 	}
 
 	// Necessary to see the errors appearing in the code and have it be outputted to stdout
@@ -50,10 +52,24 @@ func run() {
 }
 
 func child() {
-	fmt.Printf("Running %v\n", os.Args[2:])
+	fmt.Printf("Running %v as %d\n", os.Args[2:], os.Getpid())
 
 	// but we do want to set a new hostname
 	syscall.Sethostname([]byte("container"))
+
+	fsPath := os.Getenv("CHROOT")
+	if fsPath == "" {
+		panic("CHROOT env variable cannot be found :(")
+	}
+	// Note that we can't use "~" here since the command is not being interpreted
+	// Its getting directly run, which means that ~ is not translated to /home/USERNAME
+	// So we set the root to a cloned ubuntu filesystem (so that we can have a separate /proc folder to isolate the output of the ps)
+	// Then we set the current working directory of the function to the root (which is the cloned ubuntu filesystem)
+	syscall.Chroot(fsPath)
+	syscall.Chdir("/")
+	
+	// Mount is necessary for the kernel to recognize the new /proc folder as a proxy
+	syscall.Mount("proc", "proc", "proc", 0, "")
 
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 
@@ -66,6 +82,9 @@ func child() {
 
 	// Necessary to see the errors appearing in the code and have it be outputted to stdout
 	must(cmd.Run())
+
+	// Unmount the proc folder to cleanup
+	syscall.Unmount("/proc", 0)
 }
 func must(err error){
 	if err != nil {
