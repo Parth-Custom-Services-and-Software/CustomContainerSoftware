@@ -13,6 +13,19 @@ do change the hostname, it'll still say root@ubuntu.
 Note that whenever writing out the command, you'll want to include the CHROOT environment variable like so:
 `sudo CHROOT="/home/`[YOUR_NAME]`/`[NAME_OF_CLONED_UBUNTU_SYSTEM]` go run container.go run /bin/bash`
 
+## Cloning an Ubuntu File System
+Navigate to your desired directory (or create one)
+`mkdir ubuntu-fs` (to make a new directory)
+`cd ubuntu-fs`
+Then use docker to create an optimized ubuntu fs
+`docker extract $(docker create ubuntu) ubuntu.tar`
+Extract that tar file:
+`tar -xf ubuntu.tar`
+Remove the tar file:
+`rm ubuntu.tar`
+Now your cloned ubuntu system should be listed in ubuntu-fs
+
+
 Note that /proc is a pseudo-filesystem, which means that a space for the kernel and the userspace to share information
 Given that the /proc in the ubuntu filesystem copy doesn't have anything in it, it needs to be mounted as a proxy so that
 the kernel knows it needs to populate that directory with all the information about the running processes. 
