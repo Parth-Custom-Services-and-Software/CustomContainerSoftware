@@ -21,7 +21,8 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		run()
-	
+	case "child":
+		child()
 	default:
 		panic("Unrecognized command, aborting.")
 	}
@@ -31,8 +32,8 @@ func run() {
 	fmt.Printf("Running %v\n", os.Args[2:])
 
 	
-
-	cmd := exec.Command(os.Args[2], os.Args[3:]...)
+	// Once the shell is ran, it should reinvoke the same process but inside the new namespace (which is the child function)
+	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
 
 	// Mapping the shell's stdin/stdout/stderr to the commands stdin/stdout/stderr
 	cmd.Stdin = os.Stdin
@@ -48,6 +49,24 @@ func run() {
 	must(cmd.Run())
 }
 
+func child() {
+	fmt.Printf("Running %v\n", os.Args[2:])
+
+	// but we do want to set a new hostname
+	syscall.Sethostname([]byte("container"))
+
+	cmd := exec.Command(os.Args[2], os.Args[3:]...)
+
+	// Mapping the shell's stdin/stdout/stderr to the commands stdin/stdout/stderr
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	
+	// Don't need to create another namespace here
+
+	// Necessary to see the errors appearing in the code and have it be outputted to stdout
+	must(cmd.Run())
+}
 func must(err error){
 	if err != nil {
 		panic(err)
