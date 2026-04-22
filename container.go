@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"syscall"
 )
 
@@ -31,6 +33,8 @@ func main() {
 func run() {
 	fmt.Printf("Running %v as %d\n", os.Args[2:], os.Getpid())
 
+	// Running the control security groups
+	cg()
 	
 	// Once the shell is ran, it should reinvoke the same process but inside the new namespace (which is the child function)
 	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
@@ -77,7 +81,16 @@ func child() {
 	
 	// Mount is necessary for the kernel to recognize the new /proc folder as a proxy
 	syscall.Mount("proc", "proc", "proc", 0, "")
+	defer syscall.Unmount("proc", 0) // defer so that it'll run whenver this function returns or panics
 
+	// Mount is also necessary for the sys folder
+	syscall.Mount("sysfs", "sys", "sysfs", 0, "")
+	defer syscall.Unmount("sys", 0)
+
+	// Same thing with cgroup2
+	syscall.Mount("cgroup2", "/sys/fs/cgroup", "cgroup2", 0, "")
+	defer syscall.Unmount("/sys/fs/cgroup", 0)
+	
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 
 	// Mapping the shell's stdin/stdout/stderr to the commands stdin/stdout/stderr
@@ -89,10 +102,31 @@ func child() {
 
 	// Necessary to see the errors appearing in the code and have it be outputted to stdout
 	must(cmd.Run())
-
-	// Unmount the proc folder to cleanup
-	syscall.Unmount("/proc", 0)
 }
+
+func cg() {
+	MAX_PROCESES := "20"
+
+	// These are pretty self explanatory but
+	// All its doing is creating a path for the control groups:
+	// /sys/fs/cgroup/container
+	// and then creating a directory with that path and giving it the 
+	// access values: 0755
+	// which is just drwxr-xr-x (rwx for owner, rx for group, and rx for other)
+	cgroups := "/sys/fs/cgroup/container"
+	err := os.Mkdir(cgroups, 0755)
+
+	if err != nil && !os.IsExist(err) {
+		panic(err)
+	}
+
+	// Inside the control group, there can only be 20 processes (or whatever I define with MAX_PROCESSES)
+	must(os.WriteFile(filepath.Join(cgroups, "pids.max"), []byte(MAX_PROCESES), 0700))
+	// Adds the current process (the bash shell) to the control group procs file, making it subject to the same
+	// specifications given by the control group
+	must(os.WriteFile(filepath.Join(cgroups, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700))
+}
+
 func must(err error){
 	if err != nil {
 		panic(err)
