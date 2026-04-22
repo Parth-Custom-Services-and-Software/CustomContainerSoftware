@@ -44,7 +44,14 @@ func run() {
 	cmd.SysProcAttr = &syscall.SysProcAttr {
 		// UTS = unix time sharing system namespace (doesn't share the hostname)
 		// PID = process id namespace (doesn't share pids)
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID, // unix time sharing system namespace (only shares the hostname)
+		// NS = namespace namespace (first namespace so thats why its called that. Its primary purpose is for mounts)
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
+		// Currently the root directory on the host recursively shares a property across all namespaces and mounts, 
+		// so you need to deliberately turn that off:
+		// Now that we have CLONE_NEWNS in both the unshareflags and the cloneflags,
+		// running mount | grep /proc
+		// on the host machien doesn't show the mounted proc through our container :D
+		Unshareflags: syscall.CLONE_NEWNS,
 	}
 
 	// Necessary to see the errors appearing in the code and have it be outputted to stdout
